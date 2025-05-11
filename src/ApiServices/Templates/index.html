@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link id="favicon" rel="icon" type="image/png" href="static/favicon.png">
+    <link href="/static/output.css" rel="stylesheet"></link>
+    <!--script src="/static/recorder.js"></script-->
+    <!--script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.0/lame.min.js"></script-->
+    <script src="https://unpkg.com/mic-recorder-to-mp3@2.2.2/dist/index.min.js"></script>
+    <title>Chat bot - {{publique_name}}</title>
+</head>
+<body class="bg-gray-300 h-screen flex justify-end items-end p-4">
+    <button id="chatToggle" 
+            class="bg-lime-700 text-white p-3 m-3 rounded-full shadow-lg hover:bg-lime-500 focus:outline-none">
+        <svg class="h-6 w-6 text-white inline align-middle"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z"/>
+            <path d="M3 20l1.3 -3.9a9 8 0 1 1 3.4 2.9l-4.7 1" /> 
+            <line x1="12" y1="12" x2="12" y2="12.01" />
+            <line x1="8" y1="12" x2="8" y2="12.01" /> 
+            <line x1="16" y1="12" x2="16" y2="12.01" />
+        </svg>
+    </button>
+    <div id="chatContainer" class="hidden">
+        <div id="chat-header" class="w-[350px] p-2 bg-lime-700 rounded-t-xl flex justify-stretch text-white">
+            <div class="pr-2">
+                <svg class="h-6 w-6 text-white"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z"/>
+                    <path d="M3 20l1.3 -3.9a9 8 0 1 1 3.4 2.9l-4.7 1" /> 
+                    <line x1="12" y1="12" x2="12" y2="12.01" />
+                    <line x1="8" y1="12" x2="8" y2="12.01" /> 
+                    <line x1="16" y1="12" x2="16" y2="12.01" />
+                </svg>
+            </div>
+            <div class="w-full">
+                <h3 class="text-white">Chatbot - {{publique_name}}</h3>
+            </div>
+            <div>
+                <button id="minimizeChat" class="text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
+            
+        </div>
+        <div id="messagesContainer" class="bg-white w-[350px] h-80 p-2 overflow-y-scroll">
+        </div>
+        <div class="bg-white w-[350px] flex align-middle p-2">
+            <input id="textMessage" class="w-64 h-10 m-2 pl-2 pr-2 text-sm text-orange-700 border border-gray-300 focus:outline-none focus:border-orange-500" placeholder="Digite sua pergunta aqui" type="text"/>
+            <button id="sendTextMessage" class="m-0 p-4 rounded-full text-orange-500 hover:text-orange-300 disabled:text-gray-300">
+                <svg class="h-6 w-6"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z"/>
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                    <path d="M21 3L14.5 21a.55 .55 0 0 1 -1 0L10 14L3 10.5a.55 .55 0 0 1 0 -1L21 3" />
+                </svg>
+            </button>
+            
+            <button id="sendAudioMessage" class="m-0 p-4 rounded-full text-orange-500 hover:text-orange-300">
+                <svg class="h-6 w-6"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z"/>
+                    <rect x="9" y="2" width="6" height="11" rx="3" />
+                    <path d="M5 10a7 7 0 0 0 14 0" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+            </button>
+            
+        </div>
+    </div>
+    
+    <script>
+        const chatToggle = document.getElementById('chatToggle');
+        const chatContainer = document.getElementById('chatContainer');
+        const minimizeChat = document.getElementById('minimizeChat');
+
+        const sendTextMessage = document.getElementById('sendTextMessage');
+        const recordAudio = document.getElementById('sendAudioMessage');
+        const textMessage = document.getElementById('textMessage');
+        const messagesContainer = document.getElementById('messagesContainer');
+        
+        var recording = false;
+        var mediaRecorder;
+        var stream;
+        var audioChunks = [];
+        let startTime = null;
+
+        const recorder = new MicRecorder({
+            bitRate: 128
+        });
+
+        // Toggle Chat Visibility
+        chatToggle.addEventListener('click', () => {
+            chatContainer.classList.toggle('hidden');
+        });
+
+        // Minimize Chat
+        minimizeChat.addEventListener('click', () => {
+            chatContainer.classList.add('hidden');
+        });
+
+        createTextMsg = (message, userMsg = true) => {
+            const messageDiv = document.createElement('div');
+            if (userMsg)
+                messageDiv.classList.add('place-self-end', 'bg-blue-400', 'text-white', 'p-3', 'rounded-lg', 'mt-3', 'max-w-[250px]', 'text-sm');
+            else
+                messageDiv.classList.add('place-self-start', 'bg-gray-400', 'text-white', 'p-3', 'rounded-lg', 'mt-3', 'max-w-[250px]', 'text-sm');
+            
+            messageDiv.textContent = message;
+            return messageDiv
+        }
+
+        createAudioMsg = (audioUrl, userMsg) => {
+            const audio = document.createElement('audio');
+            audio.classList.add('w-[250px]');
+            audio.controls = true;
+            audio.src = audioUrl;
+
+            const messageDiv = document.createElement('div');
+            
+            if (userMsg)
+                messageDiv.classList.add('place-self-end', 'p-0', 'rounded-lg', 'w-max', 'mt-3', 'text-sm', 'bg-blue-400', 'max-w-[250px]');
+            else {
+                audio.autoplay = true;
+                messageDiv.classList.add('place-self-start', 'p-0', 'rounded-lg', 'w-max', 'mt-3', 'text-sm', 'bg-gray-400', 'max-w-[250px]');
+            }
+            messageDiv.appendChild(audio)
+
+            return messageDiv
+        }
+
+        const createErrorMsg = (errorMsg) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('place-self-center', 'p-3', 'rounded-lg', 'mt-3', 'text-sm', 'bg-red-200', 'max-w-[350px]');
+            messageDiv.textContent = errorMsg;
+
+            return messageDiv
+        }
+
+        const createLoader = () => {
+            const divLoader = document.createElement('div');
+            divLoader.classList.add('loader', 'place-self-center', 'mt-3')
+
+            return divLoader;
+        }
+
+        // Send Message
+        sendTextMessage.addEventListener('click', async () => {
+            sendTextMessage.disabled = true;
+            sendAudioMessage.disabled = true;
+            textMessage.disabled = true;
+            
+            const message = textMessage.value.trim();
+            if (message) {
+                const messageDiv = createTextMsg(message, true)
+                messagesContainer.appendChild(messageDiv);
+                textMessage.value = '';
+
+                const divLoader = createLoader();
+                messagesContainer.appendChild(divLoader);
+
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                const formData = new FormData();
+                formData.append('textMessage', message);
+
+                try {
+                    const response = await fetch('http://localhost:8000/bot/sendTextMessage', {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                    const jsonResponse = await response.json();
+                    const replyBot = createTextMsg(String(jsonResponse.answer), false)
+                    messagesContainer.appendChild(replyBot);
+                } catch(error) {
+                    const errorMsg = createErrorMsg("Error sending text message: " + error);
+                    messagesContainer.appendChild(errorMsg);
+
+                    console.error("Error sending text message: ", error);
+                } finally {
+                    messagesContainer.removeChild(divLoader);
+                    sendTextMessage.disabled = false;
+                    sendAudioMessage.disabled = false;
+                    textMessage.disabled = false;
+                }
+
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
+
+        const startRecording = async () => {
+            recorder.start().then(() => {
+                sendTextMessage.disabled = true;
+                textMessage.disabled = true;
+
+                startTime = Date.now();
+                recordAudio.classList.add('bg-red-200');
+                recordAudio.classList.replace('text-orange-500', 'text-red-500');
+                recordAudio.classList.remove('hover:text-orange-300');
+
+                sendAudioMessage.removeEventListener('click', startRecording)
+                sendAudioMessage.addEventListener('click', stopRecording)
+            });
+        }
+
+        const stopRecording = async () => {
+            recorder.stop().getMp3().then(async ([buffer, blob]) => {
+                sendTextMessage.disabled = false;
+                textMessage.disabled = false;
+
+                recordAudio.classList.remove('bg-red-200');
+                recordAudio.classList.replace('text-red-500', 'text-orange-500');
+                recordAudio.classList.add('hover:text-orange-300');
+
+                const duration = (Date.now() - startTime) / 1000;
+                if (duration < 3) {
+                    const errorMsg = createErrorMsg("Audio duration must be at least 3 seconds.");
+                    messagesContainer.appendChild(errorMsg);
+                    return;
+                }
+                if (duration > 10) {
+                    const errorMsg = createErrorMsg("Audio duration must have 10 seconds maximum.");
+                    messagesContainer.appendChild(errorMsg);
+                    return;
+                }
+
+                const file = new File(buffer, 'voice.mp3', {
+                    type: blob.type,
+                    lastModified: Date.now()
+                });
+
+                const audioUrl = URL.createObjectURL(file);
+
+                const audioMsg = createAudioMsg(audioUrl, true);
+                messagesContainer.appendChild(audioMsg);
+
+                const loaderDiv = createLoader();
+                messagesContainer.appendChild(loaderDiv);
+
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const blobAudioRes = await (await fetch('http://localhost:8000/bot/sendVoiceMessage', {
+                        method: 'POST',
+                        body: formData
+                    })).blob();
+                    
+                    console.log(blobAudioRes);
+
+                    const audioUrl = URL.createObjectURL(blobAudioRes);
+                    
+                    console.log(audioUrl);
+
+                    const audioMsg = createAudioMsg(audioUrl, false);
+
+                    messagesContainer.appendChild(audioMsg);
+                } catch (error) {
+                    const errorMsg = createErrorMsg("Error uploading áudio: " + error);
+                    messagesContainer.appendChild(errorMsg);
+
+                    console.error("Error uploading audio: ", error);
+                } finally {
+                    messagesContainer.removeChild(loaderDiv);
+
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                    sendAudioMessage.removeEventListener('click', stopRecording)
+                    sendAudioMessage.addEventListener('click', startRecording)
+                }
+            });
+        }
+
+        sendAudioMessage.addEventListener('click', startRecording);
+    </script>
+</body>
+</html>

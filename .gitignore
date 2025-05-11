@@ -1,0 +1,7 @@
+myEnv/
+tmp/
+*.log
+*.json
+.env_
+src/**/__pycache__/
+**/node_modules/

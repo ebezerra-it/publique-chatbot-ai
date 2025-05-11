@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/static/output.css" rel="stylesheet"></link>
+    <script src="/static/recorder.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.12.13/umd/ffmpeg.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.0/lame.min.js"></script>
+    <script src="https://unpkg.com/mic-recorder-to-mp3@2.2.2/dist/index.min.js"></script>
+    <title>Chat bot - {{publique_name}}</title>
+</head>
+<body class="bg-gray-300 h-screen flex justify-end items-end p-4">
+    <button id="chatToggle" 
+            class="bg-lime-700 text-white p-3 m-3 rounded-full shadow-lg hover:bg-lime-500 focus:outline-none">
+        <svg class="h-6 w-6 text-white inline align-middle"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z"/>
+            <path d="M3 20l1.3 -3.9a9 8 0 1 1 3.4 2.9l-4.7 1" /> 
+            <line x1="12" y1="12" x2="12" y2="12.01" />
+            <line x1="8" y1="12" x2="8" y2="12.01" /> 
+            <line x1="16" y1="12" x2="16" y2="12.01" />
+        </svg>
+    </button>
+    <div id="chatContainer" class="hidden">
+        <div id="chat-header" class="w-[350px] p-2 bg-lime-700 rounded-t">
+            <p class="inline">
+                <svg class="h-6 w-6 text-white inline align-middle"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z"/>
+                    <path d="M3 20l1.3 -3.9a9 8 0 1 1 3.4 2.9l-4.7 1" /> 
+                    <line x1="12" y1="12" x2="12" y2="12.01" />
+                    <line x1="8" y1="12" x2="8" y2="12.01" /> 
+                    <line x1="16" y1="12" x2="16" y2="12.01" />
+                </svg>
+                <h3 class="text-white inline align-middle">Chatbot</h3>
+                <span class="text-white inline text-right">-</span>
+            </p>
+            
+        </div>
+        <div id="messagesContainer" class="bg-white w-[350px] h-80 p-2 overflow-y-scroll">
+        </div>
+        <div class="bg-white w-[350px] flex align-middle p-2">
+            <input id="textMessage" class="w-64 h-10 m-2 pl-2 pr-2 text-sm text-orange-700 border border-gray-300 focus:outline-none focus:border-orange-500" placeholder="Digite sua pergunta aqui" type="text"/>
+            <button id="sendTextMessage" class="m-0 p-4 rounded-full text-orange-500 hover:text-orange-300 disabled:text-gray-300">
+                <svg class="h-6 w-6"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z"/>
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                    <path d="M21 3L14.5 21a.55 .55 0 0 1 -1 0L10 14L3 10.5a.55 .55 0 0 1 0 -1L21 3" />
+                </svg>
+            </button>
+            
+            <button id="sendAudioMessage" class="m-0 p-4 rounded-full text-orange-500 hover:text-orange-300">
+                <svg class="h-6 w-6"  width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z"/>
+                    <rect x="9" y="2" width="6" height="11" rx="3" />
+                    <path d="M5 10a7 7 0 0 0 14 0" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+            </button>
+            
+        </div>
+    </div>
+    
+    <script>
+        const chatToggle = document.getElementById('chatToggle');
+        const chatContainer = document.getElementById('chatContainer');
+        //const closeChat = document.getElementById('closeChat');
+
+        const sendTextMessage = document.getElementById('sendTextMessage');
+        const recordAudio = document.getElementById('sendAudioMessage');
+        const textMessage = document.getElementById('textMessage');
+        const messagesContainer = document.getElementById('messagesContainer');
+        
+        var recording = false;
+        var mediaRecorder;
+        var stream;
+        var audioChunks = [];
+        let startTime = null;
+
+        // Toggle Chat Visibility
+        chatToggle.addEventListener('click', () => {
+            chatContainer.classList.toggle('hidden');
+        });
+
+        // Close Chat
+        //closeChat.addEventListener('click', () => {
+        //    chatContainer.classList.add('hidden');
+        //});
+
+        createTextMsg = (message, userMsg = true) => {
+            const messageDiv = document.createElement('div');
+            if (userMsg)
+                messageDiv.classList.add('place-self-end', 'bg-blue-300', 'text-white', 'p-3', 'rounded-lg', 'mt-3', 'max-w-[250px]', 'text-sm');
+            else
+                messageDiv.classList.add('place-self-start', 'bg-gray-300', 'text-white', 'p-3', 'rounded-lg', 'mt-3', 'max-w-[250px]', 'text-sm');
+            
+            messageDiv.textContent = message;
+
+            return messageDiv
+        }
+
+        createAudioMsg = (audioUrl, userMsg) => {
+            const audio = document.createElement('audio');
+            audio.classList.add('w-[250px]');
+            audio.controls = true;
+            audio.src = audioUrl;
+
+            const messageDiv = document.createElement('div');
+            
+            if (userMsg)
+                messageDiv.classList.add('place-self-end', 'p-0', 'rounded-lg', 'w-max', 'mt-3', 'text-sm', 'bg-blue-300', 'max-w-[250px]');
+            else
+                messageDiv.classList.add('place-self-start', 'p-0', 'rounded-lg', 'w-max', 'mt-3', 'text-sm', 'bg-gray-200', 'max-w-[250px]');
+
+            messageDiv.appendChild(audio)
+
+            return messageDiv
+        }
+
+        const createLoader = () => {
+            const divLoader = document.createElement('div');
+            divLoader.classList.add('loader', 'place-self-center', 'mt-3')
+
+            return divLoader;
+        }
+
+        // Send Message
+        sendTextMessage.addEventListener('click', async () => {
+            sendTextMessage.disabled = true;
+            sendAudioMessage.disabled = true;
+            textMessage.disabled = true;
+            
+            const message = textMessage.value.trim();
+            if (message) {
+                const messageDiv = createTextMsg(message, true)
+                messagesContainer.appendChild(messageDiv);
+                textMessage.value = '';
+
+                const divLoader = createLoader();
+                messagesContainer.appendChild(divLoader);
+
+                const formData = new FormData();
+                formData.append('textMessage', message);
+
+                const response = await fetch('http://localhost:8000/bot/sendTextMessage', {
+                            method: 'POST',
+                            body: formData
+                        });
+                
+
+                const jsonResponse = await response.json();
+                
+                messagesContainer.removeChild(divLoader);
+
+                const replyBot = createTextMsg(String(jsonResponse.answer), false)
+                messagesContainer.appendChild(replyBot);
+                
+                sendTextMessage.disabled = false;
+                sendAudioMessage.disabled = false;
+                textMessage.disabled = false;
+
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
+
+        // Send Audio Message
+        sendAudioMessage.addEventListener('click', async () => {
+            sendTextMessage.disabled = true;
+
+            textMessage.disabled = true;
+        });
+
+
+        // Record Audio
+        sendAudioMessage.addEventListener('click', async () => {
+            recording = !recording;
+            console.log(recording);
+
+            if (recording) {
+                recordAudio.classList.add('bg-red-200');
+                recordAudio.classList.replace('text-orange-500', 'text-red-500');
+                recordAudio.classList.remove('hover:text-orange-300');
+            } else {
+                recordAudio.classList.remove('bg-red-200');
+                recordAudio.classList.replace('text-red-500', 'text-orange-500');
+                recordAudio.classList.add('hover:text-orange-300');
+            }
+
+            if (!recording) {
+                mediaRecorder.stop()
+                return;
+            }
+
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=vp9'
+                });
+
+                mediaRecorder.addEventListener('dataavailable', (event) => {
+                    audioChunks.push(event.data);
+                });
+
+                mediaRecorder.addEventListener('start', () => {
+                    startTime = Date.now();
+                });
+
+                mediaRecorder.addEventListener('stop', async () => {
+                    const duration = (Date.now() - startTime) / 1000;
+                    if (duration < 3) {
+                        alert("Audio duration must be at least 3 seconds.");
+                        mediaRecorder.
+                        stream.getTracks().forEach(track => {
+                           track.stop(); 
+                        });
+                        return;
+                    }
+
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    
+                    audioUrl = audioBufferToWav(arrayBuffer);
+
+                    createAudioMsg(audioUrl, true);
+                });
+
+                mediaRecorder.start();
+            }).catch((e) => {
+                mediaRecorder = null
+                alert('Error accessing microphone: ' + e);
+                return;
+            });
+
+
+
+            
+
+            
+
+            /*const usrAudioMsg = createAudioMsg('', true);
+            messagesContainer.appendChild(usrAudioMsg);
+
+            const replyBot = createAudioMsg('', false);
+            messagesContainer.appendChild(replyBot);*/
+            /*
+            navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+                const mediaRecorder = new MediaRecorder(stream);
+                const audioChunks = [];
+                let startTime = null;
+
+                mediaRecorder.start();
+
+                recordAudio.textContent = "Recording...";
+                recordAudio.disabled = true;
+
+                mediaRecorder.addEventListener('dataavailable', (event) => {
+                    audioChunks.push(event.data);
+                });
+
+                mediaRecorder.addEventListener('start', () => {
+                    startTime = Date.now();
+                });
+
+                mediaRecorder.addEventListener('stop', async () => {
+                    const duration = (Date.now() - startTime) / 1000;
+                    if (duration < 3) {
+                        alert("Audio duration must be at least 3 seconds.");
+                        recordAudio.textContent = "Record";
+                        recordAudio.disabled = false;
+                        return;
+                    }
+
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    const wavToMp3 = (wavBuffer) => {
+                        const wav = lamejs.WavHeader.readHeader(new DataView(wavBuffer));
+                        const samples = new Int16Array(wav.samples);
+                        const mp3Encoder = new lamejs.Mp3Encoder(wav.channels, wav.sampleRate, 128);
+                        const mp3Data = [];
+                        let mp3Chunk = mp3Encoder.encodeBuffer(samples);
+                        if (mp3Chunk.length > 0) {
+                            mp3Data.push(mp3Chunk);
+                        }
+                        mp3Chunk = mp3Encoder.flush();
+                        if (mp3Chunk.length > 0) {
+                            mp3Data.push(mp3Chunk);
+                        }
+                        return new Blob(mp3Data, { type: 'audio/mpeg' });
+                    };
+                    const mp3Blob = wavToMp3(arrayBuffer);
+
+                    const formData = new FormData();
+                    formData.append('file', mp3Blob, 'audio.mp3');
+
+                    try {
+                        await fetch('http://localhost:8000/bot/sendAudioMessage', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const audioUrl = URL.createObjectURL(mp3Blob);
+                        const audio = document.createElement('audio');
+                        audio.controls = true;
+                        audio.src = audioUrl;
+
+                        const messagesContainer = chatContainer.querySelector('.flex-1');
+                        const audioMessage = document.createElement('div');
+                        audioMessage.classList.add('self-end', 'mt-3');
+                        audioMessage.appendChild(audio);
+                        messagesContainer.appendChild(audioMessage);
+
+                    } catch (error) {
+                        console.error("Error uploading audio: ", error);
+                    }
+
+                    recordAudio.textContent = "Record";
+                    recordAudio.disabled = false;
+                });
+
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                }, 5000); // Stop recording after 5 seconds
+            }).catch((error) => {
+                console.error("Error accessing microphone: ")
+            });*/
+        })
+            
+    </script>
+</body>
+</html>
